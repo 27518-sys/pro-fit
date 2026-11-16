@@ -1,0 +1,376 @@
+// Prisma schema for Pro Fit - Complete Fitness Suite
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// 1. User & Auth
+model User {
+  id                      String                  @id @default(uuid())
+  email                   String                  @unique
+  name                    String
+  avatarUrl               String?
+  role                    String                  @default("USER") // USER, ADMIN
+  createdAt               DateTime                @default(now())
+  updatedAt               DateTime                @updatedAt
+
+  profile                 UserProfile?
+  settings                PersonalSettings?
+  exercises               Exercise[]
+  workoutSessions         WorkoutSession[]
+  workoutPlans            WorkoutPlan[]
+  nutritionLogs           NutritionLog[]
+  favoriteFoods           FavoriteFood[]
+  waterLogs               WaterLog[]
+  hydrationTarget         HydrationTarget?
+  bodyMeasurements        BodyMeasurement[]
+  fitnessGoals            FitnessGoal[]
+  workoutSchedules        WorkoutSchedule[]
+  notifications           Notification[]
+  notificationPreference  NotificationPreference?
+  customAchievements      Achievement[]
+  personalRecords         PersonalRecord[]
+  userIntegrations        UserIntegration[]
+}
+
+model UserProfile {
+  id                   String   @id @default(uuid())
+  userId               String   @unique
+  user                 User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  age                  Int?     @default(25)
+  gender               String?  @default("NOT_SPECIFIED") // MALE, FEMALE, OTHER, NOT_SPECIFIED
+  heightCm             Float?   @default(175.0)
+  currentWeightKg      Float?   @default(70.0)
+  targetWeightKg       Float?   @default(68.0)
+  activityLevel        String?  @default("MODERATE") // SEDENTARY, LIGHT, MODERATE, VERY_ACTIVE, EXTRA_ACTIVE
+  fitnessGoal          String?  @default("BUILD_MUSCLE") // LOSE_WEIGHT, BUILD_MUSCLE, MAINTAIN, ENDURANCE
+  dailyCalorieTarget   Int?     @default(2200)
+  dailyWaterTargetMl   Int?     @default(3000)
+  dailyProteinTargetG  Float?   @default(140.0)
+  dailyCarbTargetG     Float?   @default(250.0)
+  dailyFatTargetG      Float?   @default(65.0)
+  bio                  String?  @default("Fitness enthusiast striving for daily progress.")
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+}
+
+model PersonalSettings {
+  id                   String   @id @default(uuid())
+  userId               String   @unique
+  user                 User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  theme                String   @default("dark") // dark, light, system
+  units                String   @default("METRIC") // METRIC, IMPERIAL
+  soundEnabled         Boolean  @default(true)
+  vibrationEnabled     Boolean  @default(true)
+  restTimerDefaultSecs Int      @default(90)
+  weeklyStartDay       Int      @default(1) // 0=Sunday, 1=Monday
+  privacyMode          Boolean  @default(false)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+}
+
+// 2. Custom Exercises & Library
+model Exercise {
+  id              String            @id @default(uuid())
+  userId          String?           // Null for system-owned exercises
+  user            User?             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  isSystem        Boolean           @default(false)
+  name            String
+  description     String?
+  category        String            @default("STRENGTH") // STRENGTH, CARDIO, FLEXIBILITY, HIIT, BODYWEIGHT
+  targetMuscle    String            @default("CHEST") // CHEST, BACK, LEGS, SHOULDERS, ARMS, CORE, FULL_BODY
+  secondaryMuscle String?
+  equipment       String            @default("BARBELL") // BARBELL, DUMBBELL, MACHINE, BODYWEIGHT, CABLE, BANDS, KETTLEBELL
+  difficulty      String            @default("INTERMEDIATE") // BEGINNER, INTERMEDIATE, ADVANCED
+  instructions    String?
+  videoUrl        String?
+  workoutExercises WorkoutExercise[]
+  personalRecords  PersonalRecord[]
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+}
+
+// 3 & 4. Workout Sessions, Exercises, and Sets
+model WorkoutSession {
+  id              String            @id @default(uuid())
+  userId          String
+  user            User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  planId          String?
+  workoutPlan     WorkoutPlan?      @relation(fields: [planId], references: [id], onDelete: SetNull)
+  title           String
+  notes           String?
+  startedAt       DateTime          @default(now())
+  completedAt     DateTime?
+  durationMinutes Int               @default(0)
+  totalVolumeKg   Float             @default(0.0)
+  caloriesBurned  Int               @default(0)
+  rating          Int?              @default(5)
+  status          String            @default("COMPLETED") // PLANNED, IN_PROGRESS, COMPLETED, CANCELLED
+  exercises       WorkoutExercise[]
+  personalRecords PersonalRecord[]
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+}
+
+model WorkoutExercise {
+  id               String         @id @default(uuid())
+  workoutSessionId String
+  workoutSession   WorkoutSession @relation(fields: [workoutSessionId], references: [id], onDelete: Cascade)
+  exerciseId       String
+  exercise         Exercise       @relation(fields: [exerciseId], references: [id], onDelete: Cascade)
+  orderIndex       Int            @default(0)
+  notes            String?
+  sets             WorkoutSet[]
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+}
+
+model WorkoutSet {
+  id                String          @id @default(uuid())
+  workoutExerciseId String
+  workoutExercise   WorkoutExercise @relation(fields: [workoutExerciseId], references: [id], onDelete: Cascade)
+  setNumber         Int             @default(1)
+  setType           String          @default("NORMAL") // WARMUP, NORMAL, DROPSET, FAILURE
+  reps              Int             @default(10)
+  weightKg          Float           @default(0.0)
+  rpe               Float?          @default(8.0)
+  isCompleted       Boolean         @default(true)
+  restTimeSeconds   Int             @default(60)
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+}
+
+// 5. Workout Plans and Scheduled Workouts
+model WorkoutPlan {
+  id              String               @id @default(uuid())
+  userId          String
+  user            User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name            String
+  description     String?
+  difficulty      String               @default("INTERMEDIATE") // BEGINNER, INTERMEDIATE, ADVANCED
+  daysPerWeek     Int                  @default(4)
+  isPublic        Boolean              @default(false)
+  routines        WorkoutPlanRoutine[]
+  sessions        WorkoutSession[]
+  schedules       WorkoutSchedule[]
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+}
+
+model WorkoutPlanRoutine {
+  id            String      @id @default(uuid())
+  workoutPlanId String
+  workoutPlan   WorkoutPlan @relation(fields: [workoutPlanId], references: [id], onDelete: Cascade)
+  dayOfWeek     Int         @default(1) // 0-6
+  name          String
+  targetMuscles String?
+  exerciseList  String?     // JSON list of exercise names or configs
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+}
+
+// 6. Food Records and Daily Nutrition Entries
+model NutritionLog {
+  id          String   @id @default(uuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  date        String   // YYYY-MM-DD
+  mealType    String   @default("BREAKFAST") // BREAKFAST, LUNCH, DINNER, SNACK
+  foodName    String
+  calories    Int      @default(0)
+  proteinG    Float    @default(0.0)
+  carbsG      Float    @default(0.0)
+  fatG        Float    @default(0.0)
+  fiberG      Float    @default(0.0)
+  servingSize Float    @default(100.0)
+  servingUnit String   @default("g")
+  notes       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+// 7. Favorite & Recently Used Foods
+model FavoriteFood {
+  id             String   @id @default(uuid())
+  userId         String
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name           String
+  brand          String?
+  defaultServing Float    @default(100.0)
+  servingUnit    String   @default("g")
+  calories       Int      @default(0)
+  proteinG       Float    @default(0.0)
+  carbsG         Float    @default(0.0)
+  fatG           Float    @default(0.0)
+  fiberG         Float    @default(0.0)
+  isFavorite     Boolean  @default(true)
+  lastUsedAt     DateTime @default(now())
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+// 8. Water Consumption Entries & Hydration Targets
+model WaterLog {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  date      String   // YYYY-MM-DD
+  amountMl  Int      @default(250)
+  notes     String?
+  loggedAt  DateTime @default(now())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model HydrationTarget {
+  id                     String   @id @default(uuid())
+  userId                 String   @unique
+  user                   User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  dailyTargetMl          Int      @default(3000)
+  reminderIntervalMins   Int      @default(60)
+  autoAdjustForActivity  Boolean  @default(true)
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+}
+
+// 9. Body Weight & Body Measurements
+model BodyMeasurement {
+  id                 String   @id @default(uuid())
+  userId             String
+  user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  date               String   // YYYY-MM-DD
+  weightKg           Float
+  bodyFatPercentage  Float?
+  chestCm            Float?
+  waistCm            Float?
+  hipsCm             Float?
+  bicepsCm           Float?
+  thighsCm           Float?
+  notes              String?
+  photoUrl           String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+}
+
+// 10. Fitness Goals and Goal Progress
+model FitnessGoal {
+  id             String    @id @default(uuid())
+  userId         String
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title          String
+  description    String?
+  category       String    @default("WEIGHT") // WEIGHT, STRENGTH, ENDURANCE, HABIT, NUTRITION
+  targetValue    Float
+  currentValue   Float     @default(0.0)
+  unit           String    @default("kg")
+  targetDate     String?   // YYYY-MM-DD
+  isCompleted    Boolean   @default(false)
+  progressPercent Float    @default(0.0)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+}
+
+// 11. Workout Schedules and Calendar Activities
+model WorkoutSchedule {
+  id              String       @id @default(uuid())
+  userId          String
+  user            User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workoutPlanId   String?
+  workoutPlan     WorkoutPlan? @relation(fields: [workoutPlanId], references: [id], onDelete: SetNull)
+  title           String
+  description     String?
+  scheduledDate   String       // YYYY-MM-DD
+  scheduledTime   String?      // HH:mm
+  status          String       @default("SCHEDULED") // SCHEDULED, COMPLETED, MISSED, CANCELLED
+  reminderMinutes Int          @default(30)
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+}
+
+// 12. Notifications and Notification Preferences
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title     String
+  message   String
+  type      String   @default("WORKOUT_REMINDER") // WORKOUT_REMINDER, HYDRATION_REMINDER, GOAL_ACHIEVED, PR_BROKEN, SYSTEM
+  isRead    Boolean  @default(false)
+  readAt    DateTime?
+  createdAt DateTime @default(now())
+}
+
+model NotificationPreference {
+  id                 String   @id @default(uuid())
+  userId             String   @unique
+  user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workoutReminders   Boolean  @default(true)
+  hydrationReminders Boolean  @default(true)
+  goalMilestones     Boolean  @default(true)
+  weeklyReports      Boolean  @default(true)
+  emailNotifications Boolean  @default(false)
+  pushNotifications  Boolean  @default(true)
+  reminderTime       String   @default("08:00")
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+}
+
+// 13. Custom & System Achievements
+model Achievement {
+  id            String    @id @default(uuid())
+  userId        String?   // Null for system achievements, string for custom
+  user          User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  isSystem      Boolean   @default(false)
+  key           String    @unique
+  title         String
+  description   String
+  icon          String    @default("Trophy")
+  badgeColor    String    @default("amber")
+  criteriaType  String    @default("WORKOUT_COUNT") // WORKOUT_COUNT, VOLUME_KG, STREAK_DAYS, PR_COUNT, WATER_DAYS
+  criteriaValue Float     @default(1.0)
+  points        Int       @default(50)
+  unlockedAt    DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+// 14. Personal Records (PRs)
+model PersonalRecord {
+  id               String          @id @default(uuid())
+  userId           String
+  user             User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  exerciseId       String
+  exercise         Exercise        @relation(fields: [exerciseId], references: [id], onDelete: Cascade)
+  workoutSessionId String?
+  workoutSession   WorkoutSession? @relation(fields: [workoutSessionId], references: [id], onDelete: SetNull)
+  recordType       String          @default("MAX_WEIGHT") // MAX_WEIGHT, MAX_REPS, MAX_VOLUME, BEST_TIME
+  value            Float           @default(0.0)
+  unit             String          @default("kg")
+  achievedAt       DateTime        @default(now())
+  notes            String?
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+}
+
+// 15. User Integrations & Preferences
+model UserIntegration {
+  id            String    @id @default(uuid())
+  userId        String
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  provider      String    // APPLE_HEALTH, GOOGLE_FIT, STRAVA, FITBIT, MYFITNESSPAL
+  isConnected   Boolean   @default(false)
+  accessToken   String?
+  refreshToken  String?
+  syncFrequency String    @default("HOURLY") // REALTIME, HOURLY, DAILY, MANUAL
+  lastSyncedAt  DateTime?
+  configJson    String?   // JSON settings
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@unique([userId, provider])
+}
